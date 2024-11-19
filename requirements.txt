@@ -3,3 +3,4 @@ pydantic
 pandas
 uvicorn
 python-multipart
+openpyxl
