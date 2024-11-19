@@ -8,7 +8,7 @@ from statistics import mean
 app = FastAPI()
 
 # Set base path as constant
-BASE_PATH = "/home/miso/Documents/new2/xlsx/clean"
+BASE_PATH = "clean/"
 
 class SearchRequest(BaseModel):
     carrier: str
