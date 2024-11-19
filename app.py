@@ -37,31 +37,16 @@ def analyze_contracts(
     tolerance: float,
     top_n: int
 ) -> Dict:
-    """
-    Analyze contracts to get statistics for each service level.
-    
-    Args:
-        target_spend: Target spend amount as float (e.g., 670000)
-        carrier: Carrier name (e.g., 'UPS', 'FedEx')
-        tolerance: Tolerance range as decimal (e.g., 0.2 for 20%)
-        top_n: Number of top service levels to return
-        
-    Returns:
-        Dictionary containing service level statistics
-    """
     lower_spend = target_spend * (1 - tolerance)
     upper_spend = target_spend * (1 + tolerance)
     carrier_path = os.path.join(BASE_PATH, carrier)
     
-    # Dictionary to store discounts by service level
     service_discounts = {}
     
-    # Read all contract files in the carrier directory
     for filename in os.listdir(carrier_path):
         if filename.endswith('.xlsx'):
             contract_spend = float(filename.split('_')[1].replace('.xlsx', ''))
                 
-            # Check if contract is within spend range
             if lower_spend <= contract_spend <= upper_spend:
                 df = pd.read_excel(os.path.join(carrier_path, filename))
                 current_col = f'CURRENT {carrier.upper()}'
@@ -75,12 +60,11 @@ def analyze_contracts(
                             service_discounts[service] = []
                         service_discounts[service].append(discount)
                     except (ValueError, TypeError):
-                        continue  # Skip invalid values
+                        continue
     
-    # Calculate statistics for each service level
     service_stats = {}
     for service, discounts in service_discounts.items():
-        if discounts:  # Only process if we have valid discounts
+        if discounts:
             service_stats[service] = {
                 'avg_discount': mean(discounts),
                 'min_discount': min(discounts),
@@ -89,7 +73,6 @@ def analyze_contracts(
                 'discount_values': sorted(discounts)
             }
     
-    # Sort by average discount and get top N
     sorted_services = dict(sorted(
         service_stats.items(),
         key=lambda x: x[1]['avg_discount'],
@@ -99,41 +82,36 @@ def analyze_contracts(
     return sorted_services
 
 @app.post("/analyze_contracts/")
-async def analyze_contracts_endpoint(request: SearchRequest, file: UploadFile):
-    if not file.filename.endswith(".xlsx"):
+async def analyze_contracts_endpoint(
+    carrier: str = Form(...),
+    tolerance: float = Form(...),
+    top_n: int = Form(...),
+    file: UploadFile = None
+):
+    if not file or not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
     
     try:
         target_spend = extract_target_spend(file)
         results = analyze_contracts(
             target_spend,
-            request.carrier,
-            request.tolerance,
-            request.top_n
+            carrier,
+            tolerance,
+            top_n
         )
         return format_results(results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def format_results(stats: Dict) -> str:
-    """Format results dictionary into the requested output string"""
-    output = []
-    
+def format_results(stats: Dict) -> Dict:
+    formatted = []
     for service, data in stats.items():
-        # Multiply percentage values by 100 for display
-        avg_discount = data['avg_discount'] * 100
-        min_discount = data['min_discount'] * 100
-        max_discount = data['max_discount'] * 100
-        discount_values = [d * 100 for d in data['discount_values']]
-        
-        service_output = [
-            f"\nService Level: {service}",
-            f"Average Discount: {avg_discount:.2f}",
-            f"Min Discount: {min_discount:.2f}",
-            f"Max Discount: {max_discount:.2f}",
-            f"Contract Count: {data['contract_count']}",
-            f"Discount Values: {', '.join(f'{d:.2f}' for d in discount_values)}"
-        ]
-        output.extend(service_output)
-    
-    return "\n".join(output)
+        formatted.append({
+            "service_level": service,
+            "average_discount": round(data['avg_discount'] * 100, 2),
+            "min_discount": round(data['min_discount'] * 100, 2),
+            "max_discount": round(data['max_discount'] * 100, 2),
+            "contract_count": data['contract_count'],
+            "discount_values": [round(d * 100, 2) for d in data['discount_values']]
+        })
+    return {"results": formatted}
