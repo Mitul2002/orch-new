@@ -90,19 +90,23 @@ async def analyze_contracts_endpoint(
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
 
     try:
+        # Dynamically extract the target spend from the uploaded file
         target_spend = extract_target_spend(file)
+        # Dynamically analyze contracts with the provided inputs
         results = analyze_contracts(
             target_spend,
             carrier,
             tolerance,
             top_n,
         )
+        # Return the formatted results
         return format_results(results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 def format_results(stats: Dict) -> Dict:
+    """Format results dictionary into the requested output format"""
     formatted = []
     for service, data in stats.items():
         formatted.append(
